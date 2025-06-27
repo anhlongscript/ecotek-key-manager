@@ -1,88 +1,124 @@
-<!DOCTYPE html><html lang="vi">
+<!DOCTYPE html>
+<html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>EcoTek Key Admin Panel</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EcoTek Key Admin</title>
   <style>
     body {
-      background-color: #000;
-      color: #0f0;
-      font-family: monospace;
+      background: black;
+      color: lime;
+      font-family: 'Courier New', monospace;
       padding: 20px;
     }
-    h1 {
-      color: #0ff;
-    }
-    input, button {
+    input, select, button {
+      font-family: monospace;
       padding: 5px;
       margin: 5px;
-      font-family: monospace;
     }
-    .user-entry {
-      border: 1px solid #0f0;
+    .box {
+      border: 2px solid lime;
       padding: 10px;
-      margin-top: 10px;
+      margin: 10px 0;
     }
-    .disabled {
-      opacity: 0.4;
+    .inactive {
+      opacity: 0.6;
     }
   </style>
 </head>
 <body>
-  <h1>🛡️ EcoTek Key Admin Panel (Không mã hoá key)</h1>
-  <label>👤 Tên tài khoản: <input type="text" id="username"></label><br>
-  <label>🔑 Key thô: <input type="text" id="key"></label><br>
-  <label>📅 Hết hạn (timestamp): <input type="text" id="expires"></label><br>
-  <button onclick="addAccount()">➕ Thêm tài khoản</button>  <h2>📋 Danh sách tài khoản</h2>
-  <div id="accountList"></div>  <script>
-    let accounts = JSON.parse(localStorage.getItem('ecoAccounts') || '{}');
+  <h1>🛡️ <span style="color: cyan">EcoTek Key Admin Panel</span></h1>
 
-    function save() {
-      localStorage.setItem('ecoAccounts', JSON.stringify(accounts, null, 2));
-      render();
-    }
+  <div class="box">
+    <label>👤 Tên tài khoản:</label>
+    <input type="text" id="username"><br>
 
-    function addAccount() {
-      const user = document.getElementById('username').value;
-      const key = document.getElementById('key').value;
-      const expires = parseInt(document.getElementById('expires').value);
+    <label>🔑 Key thô:</label>
+    <input type="text" id="rawkey"><br>
 
-      if (!user || !key || !expires) return alert("⛔ Vui lòng nhập đầy đủ thông tin.");
+    <label>📅 Hết hạn (timestamp):</label>
+    <select id="expireTime">
+      <option value="1h">1 giờ</option>
+      <option value="12h">12 giờ</option>
+      <option value="1d">1 ngày</option>
+      <option value="7d">7 ngày</option>
+      <option value="30d">30 ngày</option>
+      <option value="forever">Vĩnh viễn</option>
+    </select>
+    <button onclick="addUser()">➕ Thêm tài khoản</button>
+  </div>
 
-      accounts[user] = { key, expires, active: true };
-      save();
-    }
+  <div class="box">
+    <h3>📋 Danh sách tài khoản</h3>
+    <div id="userList"></div>
+  </div>
 
-    function toggleAccount(user) {
-      accounts[user].active = !accounts[user].active;
-      save();
-    }
+  <script>
+    let data = {};
 
-    function deleteAccount(user) {
-      if (confirm(`Xóa tài khoản ${user}?`)) {
-        delete accounts[user];
-        save();
+    function getExpiryTimestamp(type) {
+      const now = Date.now();
+      switch(type) {
+        case "1h": return now + 1 * 60 * 60 * 1000;
+        case "12h": return now + 12 * 60 * 60 * 1000;
+        case "1d": return now + 24 * 60 * 60 * 1000;
+        case "7d": return now + 7 * 24 * 60 * 60 * 1000;
+        case "30d": return now + 30 * 24 * 60 * 60 * 1000;
+        case "forever": return 9999999999999;
+        default: return now + 24 * 60 * 60 * 1000;
       }
     }
 
-    function render() {
-      const list = document.getElementById('accountList');
-      list.innerHTML = '';
-
-      Object.entries(accounts).forEach(([user, data]) => {
-        const div = document.createElement('div');
-        div.className = 'user-entry' + (data.active ? '' : ' disabled');
-        div.innerHTML = `
-          <b>👤 ${user}</b><br>
-          🔐 Key: ${data.key}<br>
-          📅 Hết hạn: ${new Date(data.expires).toLocaleString()}<br>
-          ⚙️ Trạng thái: ${data.active ? '✅ Hoạt động' : '❌ Ngừng'}<br>
-          <button onclick="toggleAccount('${user}')">🔁 Đổi trạng thái</button>
-          <button onclick="deleteAccount('${user}')">🗑️ Xóa</button>
-        `;
-        list.appendChild(div);
-      });
+    function formatDate(timestamp) {
+      if (timestamp === 9999999999999) return 'Vĩnh viễn';
+      const date = new Date(timestamp);
+      return date.toLocaleString('vi-VN');
     }
 
-    render();
-  </script></body>
+    function addUser() {
+      const user = document.getElementById('username').value;
+      const rawkey = document.getElementById('rawkey').value;
+      const expireType = document.getElementById('expireTime').value;
+      const expires = getExpiryTimestamp(expireType);
+
+      if (!user || !rawkey) return alert("Vui lòng nhập đầy đủ thông tin!");
+
+      data[user] = {
+        key: rawkey,
+        expires: expires,
+        status: true
+      };
+      renderUsers();
+    }
+
+    function toggleUser(user) {
+      data[user].status = !data[user].status;
+      renderUsers();
+    }
+
+    function deleteUser(user) {
+      delete data[user];
+      renderUsers();
+    }
+
+    function renderUsers() {
+      const list = document.getElementById('userList');
+      list.innerHTML = '';
+      for (const user in data) {
+        const u = data[user];
+        const div = document.createElement('div');
+        div.className = 'box' + (u.status ? '' : ' inactive');
+        div.innerHTML = `
+          👤 <b>${user}</b><br>
+          🔐 Key: ${u.key}<br>
+          🗓️ Hết hạn: ${formatDate(u.expires)}<br>
+          📶 Trạng thái: ${u.status ? '✅ Hoạt động' : '⛔ Ngưng'}<br>
+          <button onclick="toggleUser('${user}')">🔁 Đổi trạng thái</button>
+          <button onclick="deleteUser('${user}')">🗑️ Xóa</button>
+        `;
+        list.appendChild(div);
+      }
+    }
+  </script>
+</body>
 </html>

@@ -1,8 +1,129 @@
 <!DOCTYPE html>
-<html>
-  <head><title>Key Manager</title></head>
-  <body style="background:black; color:lime; font-family:monospace;">
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EcoTek Key Manager</title>
+    <style>
+        body {
+            background-color: #0d0d0d;
+            color: #00ff00;
+            font-family: 'Courier New', Courier, monospace;
+            padding: 20px;
+            animation: pulseBg 5s infinite alternate;
+        }
+        @keyframes pulseBg {
+            from { background-color: #0d0d0d; }
+            to { background-color: #1a1a1a; }
+        }
+        h1 {
+            text-shadow: 0 0 10px #00ff00;
+        }
+        .section {
+            margin-top: 30px;
+            border: 1px solid #00ff00;
+            padding: 15px;
+            border-radius: 8px;
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+        label, input, button, textarea {
+            font-family: inherit;
+            font-size: 16px;
+            margin: 5px 0;
+            display: block;
+            width: 100%;
+        }
+        input, textarea {
+            padding: 8px;
+            background-color: #000;
+            border: 1px solid #00ff00;
+            color: #00ff00;
+        }
+        button {
+            background-color: #00ff00;
+            color: #000;
+            padding: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        button:hover {
+            background-color: #00cc00;
+        }
+        code {
+            background: #000;
+            padding: 5px;
+            border: 1px dashed #00ff00;
+            display: block;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
     <h1>✔️ Hệ thống Key Manager đã bật!</h1>
-    <p>Đây là trang chính index.html</p>
-  </body>
+    <p>Giao diện đậm chất hacker, sáng tạo bởi Tề Thiên Đại Thánh ✨</p>
+
+    <div class="section">
+        <h2>➕ Tạo key mới</h2>
+        <label for="user">Tên người dùng:</label>
+        <input id="user" type="text">
+        <label for="key">Key gốc (sẽ mã hóa SHA256):</label>
+        <input id="key" type="text">
+        <label for="loai">Loại key:</label>
+        <select id="loai">
+            <option value="1h">1 giờ</option>
+            <option value="12h">12 giờ</option>
+            <option value="10d">10 ngày</option>
+            <option value="vinhvien">Vĩnh viễn</option>
+        </select>
+        <label for="ip">IP người dùng:</label>
+        <input id="ip" type="text">
+        <label for="device">Thiết bị (User Agent):</label>
+        <input id="device" type="text">
+        <button onclick="taoKey()">Tạo key</button>
+        <code id="ketqua"></code>
+    </div>
+
+    <div class="section">
+        <h2>📜 Hướng dẫn sử dụng</h2>
+        <ol>
+            <li>Vào <a href="https://github.com/anhlongscript/ecotek-key-manager">GitHub repo</a> và mở file JSON key.</li>
+            <li>Copy đoạn kết quả ở ô trên và thêm vào danh sách JSON key.</li>
+            <li>Chạy UserScript và nhập user + key để xác thực.</li>
+        </ol>
+    </div>
+
+    <script>
+        async function sha256(str) {
+            const buffer = new TextEncoder().encode(str);
+            const digest = await crypto.subtle.digest("SHA-256", buffer);
+            return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        async function taoKey() {
+            const user = document.getElementById('user').value;
+            const key = document.getElementById('key').value;
+            const loai = document.getElementById('loai').value;
+            const ip = document.getElementById('ip').value;
+            const device = document.getElementById('device').value;
+            const hash = await sha256(key);
+            let expires;
+            switch(loai) {
+                case '1h': expires = Date.now() + 1 * 60 * 60 * 1000; break;
+                case '12h': expires = Date.now() + 12 * 60 * 60 * 1000; break;
+                case '10d': expires = Date.now() + 10 * 24 * 60 * 60 * 1000; break;
+                case 'vinhvien': expires = 9999999999999; break;
+            }
+            const obj = {
+                [user]: {
+                    key: hash,
+                    expires,
+                    ip,
+                    device
+                }
+            };
+            document.getElementById('ketqua').textContent = JSON.stringify(obj, null, 4);
+        }
+    </script>
+</body>
 </html>

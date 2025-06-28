@@ -2,122 +2,121 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EcoTek Key Admin</title>
+  <title>Key Manager - EcoTek</title>
   <style>
     body {
-      background: black;
-      color: lime;
-      font-family: 'Courier New', monospace;
+      background-color: #0d0d0d;
+      color: #00ff00;
+      font-family: monospace;
       padding: 20px;
     }
     input, select, button {
-      font-family: monospace;
+      background-color: #111;
+      color: #0f0;
+      border: 1px solid #0f0;
       padding: 5px;
-      margin: 5px;
+      margin: 5px 0;
+      width: 100%;
     }
-    .box {
-      border: 2px solid lime;
-      padding: 10px;
-      margin: 10px 0;
+    textarea {
+      width: 100%;
+      height: 200px;
+      background-color: #111;
+      color: #0f0;
+      border: 1px solid #0f0;
+      margin-top: 10px;
     }
-    .inactive {
-      opacity: 0.6;
+    .container {
+      max-width: 600px;
+      margin: auto;
+    }
+    h1 {
+      color: #0f0;
+      text-align: center;
+    }
+    .note {
+      color: #888;
+      font-size: 12px;
     }
   </style>
 </head>
 <body>
-  <h1>🛡️ <span style="color: cyan">EcoTek Key Admin Panel</span></h1>
+  <div class="container">
+    <h1>🔐 EcoTek Key Manager</h1>
 
-  <div class="box">
     <label>👤 Tên tài khoản:</label>
-    <input type="text" id="username"><br>
+    <input type="text" id="username">
 
-    <label>🔑 Key thô:</label>
-    <input type="text" id="rawkey"><br>
+    <label>🔑 Key (sẽ được mã hóa SHA256):</label>
+    <input type="text" id="plainKey">
 
-    <label>📅 Hết hạn (timestamp):</label>
-    <select id="expireTime">
+    <label>🕒 Hạn sử dụng:</label>
+    <select id="timeSelect">
       <option value="1h">1 giờ</option>
       <option value="12h">12 giờ</option>
-      <option value="1d">1 ngày</option>
-      <option value="7d">7 ngày</option>
-      <option value="30d">30 ngày</option>
-      <option value="forever">Vĩnh viễn</option>
+      <option value="10d">10 ngày</option>
+      <option value="vinhvien">Vĩnh viễn</option>
     </select>
-    <button onclick="addUser()">➕ Thêm tài khoản</button>
-  </div>
 
-  <div class="box">
-    <h3>📋 Danh sách tài khoản</h3>
-    <div id="userList"></div>
+    <button onclick="addUser()">➕ Tạo tài khoản</button>
+    <button onclick="deleteUser()">❌ Xóa tài khoản</button>
+    <button onclick="copyJSON()">📋 Sao chép JSON</button>
+
+    <textarea id="output" readonly></textarea>
+
+    <p class="note">* IP và thiết bị sẽ tự động được lấy khi thêm tài khoản</p>
   </div>
 
   <script>
-    let data = {};
+    const db = {};
 
-    function getExpiryTimestamp(type) {
+    async function sha256(str) {
+      const buffer = new TextEncoder().encode(str);
+      const hash = await crypto.subtle.digest("SHA-256", buffer);
+      return [...new Uint8Array(hash)].map(b => b.toString(16).padStart(2, "0")).join("");
+    }
+
+    function getExpires(type) {
       const now = Date.now();
       switch(type) {
-        case "1h": return now + 1 * 60 * 60 * 1000;
-        case "12h": return now + 12 * 60 * 60 * 1000;
-        case "1d": return now + 24 * 60 * 60 * 1000;
-        case "7d": return now + 7 * 24 * 60 * 60 * 1000;
-        case "30d": return now + 30 * 24 * 60 * 60 * 1000;
-        case "forever": return 9999999999999;
-        default: return now + 24 * 60 * 60 * 1000;
+        case '1h': return now + 1 * 60 * 60 * 1000;
+        case '12h': return now + 12 * 60 * 60 * 1000;
+        case '10d': return now + 10 * 24 * 60 * 60 * 1000;
+        default: return 9999999999999;
       }
     }
 
-    function formatDate(timestamp) {
-      if (timestamp === 9999999999999) return 'Vĩnh viễn';
-      const date = new Date(timestamp);
-      return date.toLocaleString('vi-VN');
+    async function addUser() {
+      const user = document.getElementById('username').value.trim();
+      const plainKey = document.getElementById('plainKey').value.trim();
+      const time = document.getElementById('timeSelect').value;
+
+      if (!user || !plainKey) return alert("Thiếu thông tin!");
+      const key = await sha256(plainKey);
+      const expires = getExpires(time);
+      const ip = await fetch("https://api.ipify.org?format=json").then(res => res.json()).then(d => d.ip);
+      const device = navigator.userAgent;
+
+      db[user] = { key, expires, ip, device };
+      renderJSON();
     }
 
-    function addUser() {
-      const user = document.getElementById('username').value;
-      const rawkey = document.getElementById('rawkey').value;
-      const expireType = document.getElementById('expireTime').value;
-      const expires = getExpiryTimestamp(expireType);
-
-      if (!user || !rawkey) return alert("Vui lòng nhập đầy đủ thông tin!");
-
-      data[user] = {
-        key: rawkey,
-        expires: expires,
-        status: true
-      };
-      renderUsers();
+    function deleteUser() {
+      const user = document.getElementById('username').value.trim();
+      if (!user || !(user in db)) return alert("Không tìm thấy user!");
+      delete db[user];
+      renderJSON();
     }
 
-    function toggleUser(user) {
-      data[user].status = !data[user].status;
-      renderUsers();
+    function renderJSON() {
+      document.getElementById('output').value = JSON.stringify(db, null, 2);
     }
 
-    function deleteUser(user) {
-      delete data[user];
-      renderUsers();
-    }
-
-    function renderUsers() {
-      const list = document.getElementById('userList');
-      list.innerHTML = '';
-      for (const user in data) {
-        const u = data[user];
-        const div = document.createElement('div');
-        div.className = 'box' + (u.status ? '' : ' inactive');
-        div.innerHTML = `
-          👤 <b>${user}</b><br>
-          🔐 Key: ${u.key}<br>
-          🗓️ Hết hạn: ${formatDate(u.expires)}<br>
-          📶 Trạng thái: ${u.status ? '✅ Hoạt động' : '⛔ Ngưng'}<br>
-          <button onclick="toggleUser('${user}')">🔁 Đổi trạng thái</button>
-          <button onclick="deleteUser('${user}')">🗑️ Xóa</button>
-        `;
-        list.appendChild(div);
-      }
+    function copyJSON() {
+      const ta = document.getElementById('output');
+      ta.select();
+      document.execCommand("copy");
+      alert("✅ JSON đã được sao chép!");
     }
   </script>
 </body>

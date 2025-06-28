@@ -2,122 +2,125 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>Key Manager - EcoTek</title>
+  <title>EcoTek Key Manager</title>
   <style>
     body {
-      background-color: #0d0d0d;
-      color: #00ff00;
+      background: #111;
+      color: #0f0;
       font-family: monospace;
-      padding: 20px;
+      padding: 30px;
     }
-    input, select, button {
-      background-color: #111;
+    input, select, button, textarea {
+      background: #000;
       color: #0f0;
       border: 1px solid #0f0;
-      padding: 5px;
-      margin: 5px 0;
+      padding: 10px;
+      margin: 4px 0;
       width: 100%;
     }
-    textarea {
-      width: 100%;
-      height: 200px;
-      background-color: #111;
-      color: #0f0;
-      border: 1px solid #0f0;
+    .btn {
+      cursor: pointer;
       margin-top: 10px;
     }
-    .container {
-      max-width: 600px;
-      margin: auto;
-    }
-    h1 {
+    .danger { color: red; }
+    .json-output {
+      background: #000;
       color: #0f0;
-      text-align: center;
+      border: 1px solid #0f0;
+      padding: 10px;
+      white-space: pre;
     }
-    .note {
-      color: #888;
-      font-size: 12px;
+    .label { margin-top: 20px; display: block; font-weight: bold; }
+    .title {
+      font-size: 28px;
+      color: #00ffff;
+      margin-bottom: 20px;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>🔐 EcoTek Key Manager</h1>
 
-    <label>👤 Tên tài khoản:</label>
-    <input type="text" id="username">
+  <div class="title">🔐 EcoTek Key Manager</div>
 
-    <label>🔑 Key (sẽ được mã hóa SHA256):</label>
-    <input type="text" id="plainKey">
+  <label class="label">👤 Tên tài khoản:</label>
+  <input type="text" id="username" placeholder="Nhập username">
 
-    <label>🕒 Hạn sử dụng:</label>
-    <select id="timeSelect">
-      <option value="1h">1 giờ</option>
-      <option value="12h">12 giờ</option>
-      <option value="10d">10 ngày</option>
-      <option value="vinhvien">Vĩnh viễn</option>
-    </select>
+  <label class="label">🔑 Key:</label>
+  <input type="text" id="key" placeholder="Nhập key">
 
-    <button onclick="addUser()">➕ Tạo tài khoản</button>
-    <button onclick="deleteUser()">❌ Xóa tài khoản</button>
-    <button onclick="copyJSON()">📋 Sao chép JSON</button>
+  <label class="label">⏱️ Hạn sử dụng:</label>
+  <select id="duration">
+    <option value="1h">1 giờ</option>
+    <option value="12h">12 giờ</option>
+    <option value="1d">1 ngày</option>
+    <option value="10d">10 ngày</option>
+    <option value="forever">Vĩnh viễn</option>
+  </select>
 
-    <textarea id="output" readonly></textarea>
+  <label><input type="checkbox" id="noHash"> ✅ KHÔNG mã hóa key (test)</label>
 
-    <p class="note">* IP và thiết bị sẽ tự động được lấy khi thêm tài khoản</p>
-  </div>
+  <button class="btn" onclick="addAccount()">➕ Tạo tài khoản</button>
+  <button class="btn danger" onclick="removeAccount()">❌ Xóa tài khoản</button>
+  <button class="btn" onclick="copyJSON()">📋 Sao chép JSON</button>
 
-  <script>
-    const db = {};
+  <textarea id="jsonOutput" class="json-output" rows="10" placeholder="JSON sẽ hiển thị ở đây"></textarea>
+  <p><i>* IP và thiết bị sẽ tự động lấy khi tạo tài khoản</i></p>
 
-    async function sha256(str) {
-      const buffer = new TextEncoder().encode(str);
-      const hash = await crypto.subtle.digest("SHA-256", buffer);
-      return [...new Uint8Array(hash)].map(b => b.toString(16).padStart(2, "0")).join("");
-    }
+<script>
+let accounts = {};
 
-    function getExpires(type) {
-      const now = Date.now();
-      switch(type) {
-        case '1h': return now + 1 * 60 * 60 * 1000;
-        case '12h': return now + 12 * 60 * 60 * 1000;
-        case '10d': return now + 10 * 24 * 60 * 60 * 1000;
-        default: return 9999999999999;
-      }
-    }
+function getExpires(type) {
+  const now = Date.now();
+  switch (type) {
+    case "1h": return now + 1 * 60 * 60 * 1000;
+    case "12h": return now + 12 * 60 * 60 * 1000;
+    case "1d": return now + 24 * 60 * 60 * 1000;
+    case "10d": return now + 10 * 24 * 60 * 60 * 1000;
+    case "forever": return 9999999999999;
+  }
+}
 
-    async function addUser() {
-      const user = document.getElementById('username').value.trim();
-      const plainKey = document.getElementById('plainKey').value.trim();
-      const time = document.getElementById('timeSelect').value;
+async function sha256(str) {
+  const buf = new TextEncoder().encode(str);
+  const hash = await crypto.subtle.digest("SHA-256", buf);
+  return Array.from(new Uint8Array(hash)).map(x => x.toString(16).padStart(2, '0')).join('');
+}
 
-      if (!user || !plainKey) return alert("Thiếu thông tin!");
-      const key = await sha256(plainKey);
-      const expires = getExpires(time);
-      const ip = await fetch("https://api.ipify.org?format=json").then(res => res.json()).then(d => d.ip);
-      const device = navigator.userAgent;
+async function addAccount() {
+  const username = document.getElementById('username').value.trim();
+  const keyRaw = document.getElementById('key').value.trim();
+  const duration = document.getElementById('duration').value;
+  const noHash = document.getElementById('noHash').checked;
 
-      db[user] = { key, expires, ip, device };
-      renderJSON();
-    }
+  if (!username || !keyRaw) return alert("Thiếu thông tin!");
 
-    function deleteUser() {
-      const user = document.getElementById('username').value.trim();
-      if (!user || !(user in db)) return alert("Không tìm thấy user!");
-      delete db[user];
-      renderJSON();
-    }
+  const expires = getExpires(duration);
+  const ip = (await (await fetch("https://api.ipify.org?format=json")).json()).ip;
+  const device = navigator.userAgent;
+  const key = noHash ? keyRaw : await sha256(keyRaw);
 
-    function renderJSON() {
-      document.getElementById('output').value = JSON.stringify(db, null, 2);
-    }
+  accounts[username] = { key, expires, ip, device, active: true };
+  render();
+}
 
-    function copyJSON() {
-      const ta = document.getElementById('output');
-      ta.select();
-      document.execCommand("copy");
-      alert("✅ JSON đã được sao chép!");
-    }
-  </script>
+function removeAccount() {
+  const username = document.getElementById('username').value.trim();
+  if (!username || !(username in accounts)) return alert("Tài khoản không tồn tại!");
+  delete accounts[username];
+  render();
+}
+
+function render() {
+  document.getElementById("jsonOutput").value = JSON.stringify(accounts, null, 2);
+}
+
+function copyJSON() {
+  const txt = document.getElementById("jsonOutput");
+  txt.select();
+  document.execCommand("copy");
+  alert("✅ Đã sao chép JSON!");
+}
+</script>
+
 </body>
 </html>
